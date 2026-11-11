@@ -1,0 +1,19 @@
+Diagnosis and planned decisions (drafted with AI after the deadline, see AI_USE_LOG.md)
+
+I started by loading the file and just looking at it, info(), head() and some value_counts(), before changing a single thing. The file has 97 rows and 6 columns: date, item, city, price, unit and data_label. The dates are 12 weekly Thursdays from 1 Jan to 19 Mar, there are 4 items and 2 cities, so I expected 12 x 4 x 2 = 96 rows. I got 97. So something is already off by at least one row before I even look at values.
+
+The first problem is that price is stored as text, not numbers. info() shows it as an object column. I found the reason by running to_numeric with errors set to coerce and printing the rows that turned into NaN even though the original cell was not empty. It is one cell, 15 Jan, Staple A, City 2, written as "1,250" with a comma. That number is also more than ten times the other Staple A prices, which sit between about 100 and 125, and City 1 that same day was 103. My plan is to flag it. I do not want to just strip the comma and keep 1250, because the comma is not really the problem, the number itself is not believable. I also cannot tell what the true price was, so I will not guess one. I will set it to missing in the clean price column and keep the original text in a separate column so nothing is lost.
+
+The second problem is a price of 9999 on 22 Jan, Sweetener D, City 1. describe() showed a max of 9999 against a median of 200 and a standard deviation over 1000, which is silly for a table where everything else is under 350. Sweetener D is about 153 to 162 in the weeks around it, so 9999 looks like a placeholder for "no data" rather than a price. Plan: treat as missing, flag it, keep the row.
+
+The third problem is a blank price on 1 Jan, Pulse C, City 2. isna().sum() gives exactly 1. Plan: retain the row, leave the price missing, flag it. I thought about filling it in as City 1 plus 6, because in every week where I can see both cities, City 2 is 6 higher, which would give 206. But that is me inventing a data point, so I am leaving it empty and writing down that it is missing in the source.
+
+The fourth problem is an exact duplicate. The last row of the file repeats the 8 Jan, Staple A, City 1 row at 99.5. duplicated() says 1 and the date shows up 9 times in the per date counts while every other date has 8. Plan: remove one copy and keep the first. This is the only thing I am comfortable deleting because it is the same observation entered twice and not a different observation with a bad value.
+
+The fifth problem is the item column. value_counts() shows Staple A, Oil B, Pulse C and Sweetener D with 24 each and then "oil b" with 1. My first thought was that this is a capital letter typo, easy fix. Then I printed all the rows for 5 Feb. The oil b row is City 1 with a price of 108.5, but Oil B City 1 already has its own row that week at 318, and 108.5 looks nothing like an oil price. It looks like a Staple A price. Staple A City 1 has no row at all on 5 Feb, and Staple A City 2 that week is 114.5, which is exactly 6 above 108.5. So my guess is that this is Staple A City 1 with the wrong name typed. If I only fixed the capital letters I would end up with two Oil B City 1 rows for the same date. Plan: investigate, then correct it to Staple A but flag it clearly as my inference and keep the old label in its own column.
+
+Last, unit and data_label are the same text in every row. They carry no information for analysis but I plan to retain them, because data_label is the only thing in the file that says this is not real data.
+
+Things I checked and found fine: no stray spaces in item, city or unit, all dates are exactly 7 days apart, and city only has City 1 and City 2.
+
+When I am done I want to check that every date, item and city combination appears exactly once, 96 in total, and that the only missing prices are the ones I flagged on purpose.
